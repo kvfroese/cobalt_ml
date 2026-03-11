@@ -1,4 +1,14 @@
-torch
+# Allowed
 numpy
 matplotlib
+
+# Allowed with Limitations
+torch (tensor control and some other functions allowed)
+ASE (for loading only)
+
+# To Check
+mp-api
 configargparse
+
+# Other Stuff
+https://visualstudio.microsoft.com/visual-cpp-build-tools/ (Windows)
