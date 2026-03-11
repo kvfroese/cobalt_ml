@@ -1,0 +1,1 @@
+Folder to be used to store catalyst dataset (it is not efficient to redownload dataset for every run...)
