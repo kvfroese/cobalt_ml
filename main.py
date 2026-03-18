@@ -2,4 +2,6 @@ import torch
 import numpy
 import configargparse
 
-# parsing
+# Parsing
+
+# Manual Operations
