@@ -1,0 +1,69 @@
+# style.mplstyle
+# figure generation for MLIP Cobalt project
+
+# === LaTeX Rendering ===
+text.usetex : True
+text.latex.preamble : \usepackage{amsmath} \usepackage{textcomp}
+mathtext.fontset : cm
+mathtext.rm : serif
+mathtext.it : serif
+mathtext.bf : serif
+font.size : 12
+font.family : serif
+font.serif : cmr10
+
+# === Figure & Save Settings ===
+figure.titlesize : large
+figure.titleweight : normal
+figure.figsize : 8, 6
+figure.dpi : 200
+figure.autolayout : True
+savefig.bbox : tight
+savefig.format : pdf
+savefig.dpi : 300
+
+# === Line Settings ===
+lines.linewidth : 2
+lines.markersize : 6
+
+# === Axes Settings ===
+axes.grid : True
+axes.titlesize : 16
+axes.labelsize : 14
+axes.linewidth : 1.5
+axes.formatter.use_mathtext : True
+
+# === Tick Settings ===
+xtick.labelsize : 12
+xtick.major.size : 3
+xtick.minor.size : 1.5
+xtick.major.width : 0.8
+xtick.minor.width : 0.6
+xtick.direction : out
+xtick.minor.visible : True
+
+ytick.labelsize : 12
+ytick.major.size : 3
+ytick.minor.size : 1.5
+ytick.major.width : 0.8
+ytick.minor.width : 0.6
+ytick.direction : out
+ytick.minor.visible : True
+
+# === Colour Cycle Settings ===
+axes.prop_cycle : cycler('color', ['F14040', '1A6FE0', '37AD6B', 'B17716', 'CC9900', '00CBCC', '7D4E4E', '8E8E00', 'FB650A', '6699CC', '6FB802'])
+
+# === Grid Settings ===
+grid.color : b0b0b0
+grid.linestyle : :
+grid.linewidth : 0.5
+grid.alpha : 0.3
+
+# === Legend Settings ====
+legend.fontsize : 12
+legend.frameon : True
+legend.fancybox : True
+legend.edgecolor : black
+
+# === Graph Type Settings ===
+image.cmap : viridis
