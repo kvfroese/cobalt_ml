@@ -83,5 +83,58 @@ print(X.shape)
 print(X, labels)
 
 def ridge_regression(X, y, alpha):
-    # Stuff here
-    None
+    """
+    Ridge regression from numpy normal equations
+
+    parms:
+    ----------
+    X: np.ndarray w/ shape (n_samples, n_features)
+    y: np.ndarray w/ shape (n_samples,)
+    alpha: float
+
+    returns:
+    ----------
+    w: np.ndarray w/ shape (n_features)
+    """
+    #ensure intercept terms are present (column of ones)
+    if not np.allclose(X[:, 0], 1.0):
+        X = np.column_stack([np.ones(X.shape[0]), X])
+
+    #normal equations: (X^T X + aI) w = X^T y
+    n_features = X.shape[1]
+    xtx = X.T @ X
+    xty = X.T @ y
+
+    #adding ridge penalty to diagonal (excluding intercept)
+    ridge_matrix = xtx.copy()
+    np.fill_diagonal(ridge_matrix, np.diag(xtx) + alpha)
+
+    #solve linear system
+    try:
+        w = np.linalg.solve(ridge_matrix, xty)
+    except np.linalg.LinAlgError:
+        print('Matrix singular, using pseudo-inverse to compute w')
+        w = np.linalg.pinv(ridge_matrix) @ y
+    
+    return w
+
+def predict(X, w):
+    """
+    Predicts using trained ridge regression coefficients
+
+    Parms:
+    ----------
+    X: np.ndarray w/ shape (n_samples, n_features)
+    w: np.ndarray w/ shape (n_features + 1,)
+
+    Returns:
+    ----------
+    y_pred: np.ndarray w/ shape (n_samples,)
+    """
+    #adding intercept if more than one element than X has cols
+    if w.shape == X.shape[1] + 1:
+        X = np.column_stack([np.ones(X.shape[0]), X])
+    
+    return X @ w
+
+
