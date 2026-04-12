@@ -120,6 +120,7 @@ print(f"You have {len(atom_triplets_list)} atom angle descriptions for the first
 ## Calculation of Distance and Angle
 
 def calculate_distance(atom1, atom2):
+    # 0 is id, 1 is atom symbol, 2-4 are x, y, z coordinates
     pair_ids = atom1[0], atom2[0]
     x1, y1, z1 = atom1[2], atom1[3], atom1[4]
     x2, y2, z2 = atom2[2], atom2[3], atom2[4]
@@ -139,8 +140,10 @@ def calculate_angle(atom1, atom2, atom3):
     dot_num = np.dot(a_vec, b_vec)
     dot_denom = np.linalg.norm(a_vec) * np.linalg.norm(b_vec)
     cos_theta = np.clip(dot_num / dot_denom, -1.0, 1.0)  # clip to avoid numerical issues
+    theta = np.arccos(cos_theta)
+    theta = np.clip(theta, 0.0, np.pi)  # clip to valid range
 
-    return cos_theta, triplet_ids
+    return cos_theta, theta, triplet_ids
 
 def calculate_all_distances(atom_pairs):
     distances = []
@@ -152,22 +155,24 @@ def calculate_all_distances(atom_pairs):
 def calculate_all_angles(atom_triplets):
     angles = []
     for triplet in atom_triplets:
-        cos_theta, triplet_ids = calculate_angle(triplet[0], triplet[1], triplet[2])
-        angles.append((triplet_ids, cos_theta))
+        cos_theta, theta, triplet_ids = calculate_angle(triplet[0], triplet[1], triplet[2])
+        angles.append((triplet_ids, (cos_theta, theta)))
     return angles
 
-atom_geometry = []
-for i, structure in enumerate(atom_files):
-    atom_pairs = unique_atom_pairs(structure[1])
-    atom_triplets = unique_atom_triplets(structure[1])
-    distances = calculate_all_distances(atom_pairs)
-    angles = calculate_all_angles(atom_triplets)
-    atom_geometry.append((structure[0], distances, angles))
-    
+# Unnecessary now, but useful for seeing ID numbers and checking outputs
+# atom_geometry = []
+# for i, structure in enumerate(atom_files):
+#     atom_pairs = unique_atom_pairs(structure[1])
+#     atom_triplets = unique_atom_triplets(structure[1])
+#     distances = calculate_all_distances(atom_pairs)
+#     angles = calculate_all_angles(atom_triplets)
+#     atom_geometry.append((structure[0], distances, angles))
+#
+# print(f"The first structure has {len(distances)} distances and {len(angles)} angles.")
+# print(f"Example distance: {str(distances[0]):.100} ... , example angle: {str(angles[0]):.100} ...")
 
-print(f"The first structure has {len(distances)} distances and {len(angles)} angles.")
+# Sorting, final data structure
 
-# Resorting
 atom_geometry = []
 for i, structure in enumerate(atom_files):
     distances = calculate_all_distances(unique_atom_pairs(structure[1]))
@@ -178,16 +183,17 @@ for i, structure in enumerate(atom_files):
     
     # For each angle, collect the three associated distances
     angle_distances = []
-    for triplet_ids, cos_theta in angles:
+    for triplet_ids, angle_tuple in angles:
+        cos_theta, theta = angle_tuple
         id1, id2, id3 = triplet_ids
         dist1 = distance_dict[tuple(sorted((id1, id2)))]
         dist2 = distance_dict[tuple(sorted((id2, id3)))]
         dist3 = distance_dict[tuple(sorted((id1, id3)))]
-        angle_distances.append((cos_theta, [dist1, dist2, dist3]))
+        angle_distances.append(((cos_theta, theta), [dist1, dist2, dist3]))
     
     atom_geometry.append((structure[0], angle_distances))
 
-print(atom_geometry[0])
+print(f"Geometries:\n{str(atom_geometry):.250} ...")
 
 '''
 The final data structure is a list of tuples. Each tuple contains:
