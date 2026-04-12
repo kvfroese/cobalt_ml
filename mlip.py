@@ -199,41 +199,43 @@ def compute_descriptor_grads(triplet_geometry, pair_geometry, eta, zeta, lambda_
     for struct in triplet_geometry: # onto structures, level a
         data_values = struct[1] # onto data values, level b,
         ang_G_grad = np.array([0.0, 0.0, 0.0])
+
+        for vals in data_values:
         
-        cos_theta = data_values[0][0]
-        theta = data_values[0][1]
-        r_ij, r_ik, r_jk = data_values[1] # scalars
+            cos_theta = vals[0][0]
+            theta = vals[0][1]
+            r_ij, r_ik, r_jk = vals[1] # scalars
 
-        dG2_dtheta, dG2_dr_ij, dG2_dr_ik, dG2_dr_jk = angular_G2_derivative(
-            cos_theta, theta, r_ij, r_ik, r_jk,
-            r_cut, zeta, lambda_, eta
-        )
-
-        if len(data_values) > 2:
-            r_ij_unit_vec = np.array(data_values[2][0])
-            r_ik_unit_vec = np.array(data_values[2][1])
-            r_jk_unit_vec = np.array(data_values[2][2])
-        else:
-            raise ValueError(
-                "Triplet data must include displacement unit vectors for Cartesian projection"
+            dG2_dtheta, dG2_dr_ij, dG2_dr_ik, dG2_dr_jk = angular_G2_derivative(
+                cos_theta, theta, r_ij, r_ik, r_jk,
+                r_cut, zeta, lambda_, eta
             )
 
-        theta_grad = theta_internal_cart_proj(
-            cos_theta, theta, r_ij, r_ik,
-            r_ij_unit_vec, r_ik_unit_vec,
-            dG2_dtheta
-        )
-        r_ij_grad = r_internal_cart_proj(dG2_dr_ij, r_ij_unit_vec)
-        r_ik_grad = r_internal_cart_proj(dG2_dr_ik, r_ik_unit_vec)
-        r_jk_grad = r_internal_cart_proj(dG2_dr_jk, r_jk_unit_vec)
+            if len(vals) > 2:
+                r_ij_unit_vec = np.array(vals[2][0])
+                r_ik_unit_vec = np.array(vals[2][1])
+                r_jk_unit_vec = np.array(vals[2][2])
+            else:
+                raise ValueError(
+                    "Triplet data must include displacement unit vectors for Cartesian projection"
+                )
 
-        ang_G_grad += theta_grad + r_ij_grad + r_ik_grad + r_jk_grad
+            theta_grad = theta_internal_cart_proj(
+                cos_theta, theta, r_ij, r_ik,
+                r_ij_unit_vec, r_ik_unit_vec,
+                dG2_dtheta
+            )
+            r_ij_grad = r_internal_cart_proj(dG2_dr_ij, r_ij_unit_vec)
+            r_ik_grad = r_internal_cart_proj(dG2_dr_ik, r_ik_unit_vec)
+            r_jk_grad = r_internal_cart_proj(dG2_dr_jk, r_jk_unit_vec)
 
-    ang_desc_grads.append((struct[0], ang_G_grad))
+            ang_G_grad += theta_grad + r_ij_grad + r_ik_grad + r_jk_grad
+
+        ang_desc_grads.append((struct[0], ang_G_grad))
 
     return rad_desc_grads, ang_desc_grads
 
-rad_desc_grads, ang_desc_grads = compute_descriptor_grads(test_triplet_data, test_pair_data, eta, zeta, lambda_, r_cut, r_s)
+rad_desc_grads, ang_desc_grads = compute_descriptor_grads(triplet_geometry, pair_geometry, eta, zeta, lambda_, r_cut, r_s)
 '''
 triplet_geometry[a][b][c][d][e],
 - a structure
