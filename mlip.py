@@ -171,12 +171,15 @@ def compute_descriptors(triplet_geometry, pair_geometry, eta, zeta, lambda_, r_c
     Compute descriptors for all atoms in each structure.
     
     Parameters:
-    - triplet_geometry: loaded data structure
+    - triplet_geometry, pair_geometry: loaded data structures
     - eta, zeta, lambda_, r_cut: hyperparameters
     - r_s, shift value for G1, hyperparameter
-    
+
     Returns:
-    - descriptors: list of np.array, one per structure, shape (num_atoms, num_features)
+    - ang_descriptor: for each structure we have a set of the summed angular descriptor,
+    as well as the elementwise summed 4D gradient vector (theta, plus 3 r's)
+    - rad_descriptor: for each structure we have a set of the summed radial descriptor
+    and the summed derivative
     '''
     
     ang_descriptor = []
@@ -200,7 +203,7 @@ def compute_descriptors(triplet_geometry, pair_geometry, eta, zeta, lambda_, r_c
 
         ang_descriptor.append((struct[0], ang_G, (theta_deriv, (r_ij_deriv, r_ik_deriv, r_jk_deriv))))
     
-    dist_descriptor = []
+    rad_descriptor = []
     for struct in pair_geometry: # onto structures, level a
         data_values = struct[1] # onto data values, level b
         
@@ -211,24 +214,9 @@ def compute_descriptors(triplet_geometry, pair_geometry, eta, zeta, lambda_, r_c
             rad_G += radial_G1(r, r_s, r_cut, eta)
             rad_G_deriv += radial_G1_derivative(r, r_s, r_cut, eta)
         
-        dist_descriptor.append((struct[0], rad_G, rad_G_deriv))
+        rad_descriptor.append((struct[0], rad_G, rad_G_deriv))
     
-    return ang_descriptor, dist_descriptor
+    return ang_descriptor, rad_descriptor
 
-ang_descriptor, dist_descriptor  = compute_descriptors(triplet_geometry, pair_geometry, eta, zeta, lambda_, r_cut, r_s)
-print(f"Radial Descriptor:\n{str(dist_descriptor):.200} ...\nAngular Descriptr:\n{str(ang_descriptor):200} ...")
-
-def compute_descriptor_gradients(atom_geometry, pair_geometry, eta, zeta, lambda_, r_cut, r_s_list):
-    """
-    Compute descriptor gradients (dG/dR) for forces, for all atoms in each structure.
-    
-    Returns:
-    - gradients: list of np.array, one per structure, shape (num_atoms, num_features, 3*num_atoms)
-    But to keep efficient, perhaps return per atom contributions.
-    For simplicity, accumulate in a way that can be used for forces.
-    """
-    # This is more complex; for efficiency, use sparse or per-pair/triplet accumulation.
-    # Placeholder: similar loop, but compute derivatives and assign to correct atom indices.
-    # Assuming we have atom indices; if not, need to modify data structure.
-    # For now, skip full implementation, but note: for each pair/triplet, add dG/dr to the gradient tensor.
-    pass  # Implement similarly to descriptors, using derivative functions.
+ang_descriptor, rad_descriptor  = compute_descriptors(triplet_geometry, pair_geometry, eta, zeta, lambda_, r_cut, r_s)
+print(f"Radial Descriptor:\n{str(rad_descriptor):.200} ...\nAngular Descriptr:\n{str(ang_descriptor):200} ...")
