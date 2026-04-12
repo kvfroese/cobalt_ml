@@ -170,7 +170,7 @@ def calculate_displacement(atom1, atom2):
     r_k = z2 - z1
     r_scal = ((x2 - x1)**2 + (y2 - y1)**2 + (z2 - z1)**2)**0.5
     r_unit_vec = r_i/r_scal, r_j/r_scal, r_k/r_scal
-    return r_unit_vec, pair_ids
+    return (r_unit_vec, pair_ids)
     
 
 def calculate_angle(atom1, atom2, atom3):
@@ -179,8 +179,8 @@ def calculate_angle(atom1, atom2, atom3):
     x2, y2, z2 = atom2[2], atom2[3], atom2[4] # central atom
     x3, y3, z3 = atom3[2], atom3[3], atom3[4]
 
-    a_vec = (x1 - x2, y1 - y2, z1 - z2)
-    b_vec = (x3 - x2, y3 - y2, z3 - z2)
+    a_vec = (x2 - x1, y2 - y1, z2 - z1)
+    b_vec = (x3 - x1, y3 - y1, z3 - z1)
 
     dot_num = np.dot(a_vec, b_vec)
     dot_denom = np.linalg.norm(a_vec) * np.linalg.norm(b_vec)
@@ -196,8 +196,9 @@ def calculate_all_distances(atom_pairs):
     for pair in atom_pairs:
         r_scal, pair_ids = calculate_distance(pair[0], pair[1])
         distances.append((pair_ids, r_scal))
-        r_vec, pair_ids = calculate_displacement(pair[0], pair[1])
-        displaces.append((pair_ids, r_vec))
+        r_unit_vec, pair_ids = calculate_displacement(pair[0], pair[1])
+        displaces.append((pair_ids, r_unit_vec))
+    print(displaces)
     return distances, displaces
 
 def calculate_all_angles(atom_triplets):
@@ -234,14 +235,17 @@ for i, structure in enumerate(atom_files):
         dist1 = distance_dict[tuple(sorted((id1, id2)))]
         dist2 = distance_dict[tuple(sorted((id2, id3)))]
         dist3 = distance_dict[tuple(sorted((id1, id3)))]
-        disp1 = displace_dict[tuple(sorted((id1, id2)))]
-        disp2 = displace_dict[tuple(sorted((id2, id3)))]
-        disp3 = displace_dict[tuple(sorted((id1, id3)))]
-        angle_distances.append(((cos_theta, theta), (dist1, dist2, dist3), (disp1, disp2, disp3)))
+
+        unit1 = displace_dict[tuple(sorted((id1, id2)))]
+        unit2 = displace_dict[tuple(sorted((id2, id3)))]
+        unit3 = displace_dict[tuple(sorted((id1, id3)))]
+
+        angle_distances.append(((cos_theta, theta), (dist1, dist2, dist3), (unit1, unit2, unit3)))
     
     atom_triplet_geometry.append((structure[0], angle_distances))
 
-print(f"Atom geometries:\n{str(atom_triplet_geometry):.300} ...")
+print(f"Atom triplet geometries:\n{str(atom_triplet_geometry):.200} ...")
+print(f"Atom pair goemetries:\n{str(atom_pair_geometry):.500} ...")
 
 '''
 The final data structure is a list of tuples. Each tuple contains:

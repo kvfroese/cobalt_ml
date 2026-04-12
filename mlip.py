@@ -10,7 +10,6 @@ Implementation of all necessary functions for the MLIP potential, including
 from pathlib import Path
 import numpy as np
 import configargparse
-import pickle
 
 from utility import path_handler, file_saver, file_loader
 
@@ -79,8 +78,6 @@ lambda_ = parser.lambda_
 pair_geometry = file_loader(geometry_file_name, geometry_folder, "pair")
 triplet_geometry = file_loader(geometry_file_name, geometry_folder, "triplet")
 
-print(pair_geometry)
-
 def cutoff(r_ij, r_cut):
     if r_ij <= r_cut:
         fc = 0.5 * (np.cos(np.pi*r_ij/r_cut) + 1)
@@ -105,10 +102,9 @@ def radial_G1(r_ij, r_s, r_cut, eta):
     G1 = np.exp(-eta*(r_ij - r_s)**2) * cutoff(r_ij, r_cut)
     return G1
 
-def radial_G1_derivative(r_ij, r_s, r_cut, eta):
+def radial_G1_derivative(r_ij, r_s, eta, cutoff_deriv):
     exp_term = np.exp(-eta*(r_ij - r_s)**2)
-    exp_deriv = exp_term * (-2*eta*(r_ij - r_s))
-    dG1_dr = exp_deriv * cutoff(r_ij, r_cut) + exp_term * cutoff_derivative(r_ij, r_cut)
+    dG1_dr = -2*eta*(r_ij - r_s) * exp_term + exp_term
     return dG1_dr
 
 def angular_G2(cos_theta, r_ij, r_ik, r_jk, r_cut, zeta, lambda_, eta):
@@ -121,43 +117,127 @@ def angular_G2(cos_theta, r_ij, r_ik, r_jk, r_cut, zeta, lambda_, eta):
 def angular_G2_derivative(cos_theta, theta, r_ij, r_ik, r_jk, r_cut, zeta, lambda_, eta):
     # Big boys
     const = 2**(1-zeta)
-    exp_squared_sum = np.exp(-eta * (r_ij**2 + r_ik**2 + r_jk**2))
+    exp_term = np.exp(-eta * (r_ij**2 + r_ik**2 + r_jk**2))
     cos_term = (1 + lambda_ * cos_theta)**zeta # constant with respect to r_ij, r_ik, r_jk
 
     # Cutoffs
     fc_r_ij = cutoff(r_ij, r_cut)
     fc_r_ik = cutoff(r_ik, r_cut)
     fc_r_jk = cutoff(r_jk, r_cut)
+    f_c_tot = fc_r_ij * fc_r_ik * fc_r_jk
+    
     dfc_r_ij = cutoff_derivative(r_ij, r_cut)
     dfc_r_ik = cutoff_derivative(r_ik, r_cut)
     dfc_r_jk = cutoff_derivative(r_jk, r_cut)
 
-    # Derivative with respect to cos_theta
-    dG2_dtheta = const * (zeta*(1 + lambda_*cos_theta)**(zeta - 1)) * (-lambda_*np.sin(theta)) * (exp_squared_sum * fc_r_ij*fc_r_ik*fc_r_jk)
-
+    # Derivative with respect to theta
+    dG2_dtheta = (const * exp_term * f_c_tot) * zeta*lambda_*(1 + lambda_*cos_theta)**(zeta - 1) * (-np.sin(theta))
     # r derivatives
-    dG2_dr_ij = const * (cos_term * fc_r_ik*fc_r_jk * (dfc_r_ij * exp_squared_sum + (exp_squared_sum * (-2*eta*r_ij) * fc_r_ij)))
-    dG2_dr_ik = const * (cos_term * fc_r_ij*fc_r_jk * (dfc_r_ik * exp_squared_sum + (exp_squared_sum * (-2*eta*r_ik) * fc_r_ik)))
-    dG2_dr_jk = const * (cos_term * fc_r_ij*fc_r_ik * (dfc_r_jk * exp_squared_sum + (exp_squared_sum * (-2*eta*r_jk) * fc_r_jk)))
+    dG2_dr_ij = const*cos_term * (fc_r_ik*fc_r_jk) * ((exp_term*(-2*eta*r_ij)*fc_r_ij) + exp_term*dfc_r_ij)
+    dG2_dr_ik = const*cos_term * (fc_r_ij*fc_r_jk) * ((exp_term*(-2*eta*r_ik)*fc_r_ik) + exp_term*dfc_r_ik)
+    dG2_dr_jk = const*cos_term * (fc_r_ij*fc_r_ik) * ((exp_term*(-2*eta*r_jk)*fc_r_jk) + exp_term*dfc_r_jk)
 
     grad = (dG2_dtheta, dG2_dr_ij, dG2_dr_ik, dG2_dr_jk)
     return grad
 
-def rad_internal_cart_proj(internal_grad_r_ij, r_ij_unit_vec):
+def r_internal_cart_proj(dF_dr, r_unit_vec):
     # Simple application of chain rule
-    proj_grad = np.array(r_ij_unit_vec) * internal_grad_r_ij
+    # r_ij_unit_vec is vector with form (x, y, z) and internal_grad_r_ij is a scalar
+    proj_grad = -r_unit_vec * dF_dr
     return proj_grad
 
-def ang_internal_cart_proj(cos_theta, theta, r_ij):
-    # More complicated application of chain rule
-    None
+def theta_internal_cart_proj(cos_theta, theta, r_ij, r_ik, r_ij_unit_vec, r_ik_unit_vec, dF_dtheta):
+    proj = r_ij_unit_vec/np.sin(theta)*(1/r_ik + cos_theta/r_ij) + r_ik_unit_vec*np.sin(theta)*(1/r_ij + cos_theta/r_ik)
+    proj_grad = proj * dF_dtheta
+    return proj_grad
 
+test_triplet_data = [('example1',
+                    ((np.float64(-0.5245697946451036), np.float64(2.1230060501601384)), # angle data, cos_theta, theat
+                     (np.float64(0.9699237134950357), np.float64(1.65381114097106), np.float64(0.9241097121013283)), # distances
+                    ((0.8165590643681625, 0.0, -0.577261894115826), # displacements
+                     (0.9928582286825538, 0.0, -0.11930020007251395),
+                     (-0.919804206004057, 0.0, -0.3923776530553777))))]
+print(test_triplet_data[0][1][2])
+
+test_pair_data = [('example1',
+                [((0, 1), np.float64(0.9241097121013283)), # distance 1
+                 ((0, 2), np.float64(0.9699237134950357))], # # distance 2
+                [((0, 1), (-0.919804206004057, 0.0, -0.3923776530553777)), # disp 1
+                 ((0, 2), (0.8165590643681625, 0.0, -0.577261894115826))])] # disp 2
+
+print(test_pair_data[0][2][0][1][2])
+
+def compute_descriptor_grads(triplet_geometry, pair_geometry, eta, zeta, lambda_, r_cut, r_s):
+    rad_desc_grads = []
     
+    for struct in pair_geometry: # onto structures, level a
+        data_values = struct[1]  # onto data values, level b
+        unit_values = struct[2]  # onto displacements, level b
+        
+        rad_G_grad = np.array([0.0, 0.0, 0.0])  # summed Cartesian gradient
+        
+        for i, dist_val in enumerate(data_values):  # iterate through each pair, level c
+            r_ij = dist_val[1]  # scalar distance
+            r_ij_unit_vec = np.array(unit_values[i][1]) # unit vector from displacement
 
+            dfc_dr = cutoff_derivative(r_ij, r_cut)
+            dG1_dr = radial_G1_derivative(r_ij, r_s, eta, dfc_dr)
+            
+            # Project scalar derivative to Cartesian coordinates
+            cart_grad = r_internal_cart_proj(dG1_dr, r_ij_unit_vec)
+            rad_G_grad += cart_grad
+        
+        rad_desc_grads.append((struct[0], rad_G_grad))
+    
+    # chain rule for angular symmetry derivative:
+    # dG2/dalpha = dG2/dtheta * dtheta/dalpha
+    #             + dG2/dr_ij * dr_ij/dalpha
+    #             + dG2/dr_ik * dr_ik/dalpha
+    #             + dG2/dr_jk * dr_jk/dalpha
+    ang_desc_grads = []
+
+    for struct in triplet_geometry: # onto structures, level a
+        data_values = struct[1] # onto data values, level b,
+        ang_G_grad = np.array([0.0, 0.0, 0.0])
+        
+        cos_theta = data_values[0][0]
+        theta = data_values[0][1]
+        r_ij, r_ik, r_jk = data_values[1] # scalars
+
+        dG2_dtheta, dG2_dr_ij, dG2_dr_ik, dG2_dr_jk = angular_G2_derivative(
+            cos_theta, theta, r_ij, r_ik, r_jk,
+            r_cut, zeta, lambda_, eta
+        )
+
+        if len(data_values) > 2:
+            r_ij_unit_vec = np.array(data_values[2][0])
+            r_ik_unit_vec = np.array(data_values[2][1])
+            r_jk_unit_vec = np.array(data_values[2][2])
+        else:
+            raise ValueError(
+                "Triplet data must include displacement unit vectors for Cartesian projection"
+            )
+
+        theta_grad = theta_internal_cart_proj(
+            cos_theta, theta, r_ij, r_ik,
+            r_ij_unit_vec, r_ik_unit_vec,
+            dG2_dtheta
+        )
+        r_ij_grad = r_internal_cart_proj(dG2_dr_ij, r_ij_unit_vec)
+        r_ik_grad = r_internal_cart_proj(dG2_dr_ik, r_ik_unit_vec)
+        r_jk_grad = r_internal_cart_proj(dG2_dr_jk, r_jk_unit_vec)
+
+        ang_G_grad += theta_grad + r_ij_grad + r_ik_grad + r_jk_grad
+
+    ang_desc_grads.append((struct[0], ang_G_grad))
+
+    return rad_desc_grads, ang_desc_grads
+
+rad_desc_grads, ang_desc_grads = compute_descriptor_grads(test_triplet_data, test_pair_data, eta, zeta, lambda_, r_cut, r_s)
 '''
 triplet_geometry[a][b][c][d][e],
 - a structure
-- b=0,1 for file name or list of values for each atom
+- b=0,1,2 for file name or list of values for each atom
 - c is one set of data values
 - d=0,1 for angle values or distance values
 - e=0,1 (cos_theta_ijk, theta_ijk) or 0,1,2 (r_ij, r_ik, r_jk) for choosing said values
@@ -165,12 +245,11 @@ triplet_geometry[a][b][c][d][e],
 '''
 pair_geometry[a][b][c][d]
 - a structure
-- b=0,1 for file name or list of values for each atom
+- b=0,1,2 for file name, distance, or displacement, per atom
 - c for each atom
-- d=0,1 for id or value
+- d=0,1 for id or values
+- e=0,1,2 for i, j, k/x, y, z (displacements only)
 '''
-
-print(pair_geometry[0][0])
 
 
 def compute_descriptors(triplet_geometry, pair_geometry, eta, zeta, lambda_, r_cut, r_s):
@@ -194,42 +273,37 @@ def compute_descriptors(triplet_geometry, pair_geometry, eta, zeta, lambda_, r_c
         data_values = struct[1]  # onto data values, level b
 
         ang_G = 0
-        theta_deriv = 0
-        r_ij_deriv = 0
-        r_ik_deriv = 0
-        r_jk_deriv = 0
         for vals in data_values: # iterating through each atom, level c
             r_ij, r_ik, r_jk = vals[1][0], vals[1][1], vals[1][2]
             cos_theta, theta = vals[0][0], vals[0][1] # angle, theta
             ang_G += angular_G2(cos_theta, r_ij, r_ik, r_jk, r_cut, zeta, lambda_, eta)
-            ang_G_deriv = angular_G2_derivative(cos_theta, theta, r_ij, r_ik, r_jk, r_cut, zeta, lambda_, eta)
-            theta_deriv += ang_G_deriv[0]
-            r_ij_deriv += ang_G_deriv[1]
-            r_ik_deriv += ang_G_deriv[2]
-            r_jk_deriv += ang_G_deriv[3]
 
-        ang_descriptor.append((struct[0], ang_G, theta_deriv, r_ij_deriv, r_ik_deriv, r_jk_deriv))
+        ang_descriptor.append((struct[0], ang_G)) # theta_deriv, r_ij_deriv, r_ik_deriv, r_jk_deriv))
     
     rad_descriptor = []
     for struct in pair_geometry: # onto structures, level a
         data_values = struct[1] # onto data values, level b
         
         rad_G = 0
-        rad_G_deriv = 0
+        # rad_G_deriv = 0
         for vals in data_values: # iterating through each atom, level c
-            r = vals[1]
-            rad_G += radial_G1(r, r_s, r_cut, eta)
-            rad_G_deriv += radial_G1_derivative(r, r_s, r_cut, eta)
+            r_scal = vals[1]
+            rad_G += radial_G1(r_scal, r_s, r_cut, eta)
+            # rad_G_deriv += radial_G1_derivative(r, r_s, r_cut, eta)
         
-        rad_descriptor.append((struct[0], rad_G, rad_G_deriv))
+        rad_descriptor.append((struct[0], rad_G)) # rad_G_deriv))
     
     return ang_descriptor, rad_descriptor
 
 ang_descriptor, rad_descriptor  = compute_descriptors(triplet_geometry, pair_geometry, eta, zeta, lambda_, r_cut, r_s)
 print(f"Radial Descriptor:\n{str(rad_descriptor):.250} ...\nAngular Descriptr:\n{str(ang_descriptor):250} ...")
+print(f"Rad Grads:\n{str(rad_desc_grads):.250} ...\nAng Grads:\n{str(ang_desc_grads):250} ...")
 
-## Saving Descriptor Info
+
+# Saving Descriptor Info
 
 if __name__ == '__main__':
     file_saver(descriptor_file_name, descriptor_folder, "ang", ang_descriptor)
     file_saver(descriptor_file_name, descriptor_folder, "rad", rad_descriptor)
+    file_saver(descriptor_file_name, descriptor_folder, "rad_grad", rad_desc_grads)
+    file_saver(descriptor_file_name, descriptor_folder, "ang_grad", ang_desc_grads)
