@@ -12,7 +12,7 @@ import numpy as np
 import configargparse
 import pickle
 
-from utility import path_handler
+from utility import path_handler, file_saver, file_loader
 
 ## Parser Setup
 
@@ -27,20 +27,22 @@ def parser_client():
     parser.add_argument('-c',
                         '--my-config',
                         is_config_file=True,
-                        help="Path of custom config file"
-                        )
-    parser.add_argument('--pair_file_name',
+                        help="Path of custom config file")
+    parser.add_argument('--geometry_file_names',
                         type=str,
-                        help="Name of file that contains all pair geometry values"
+                        help="Base name of files that contain geometry values"
                         )
-    parser.add_argument('--triplet_file_name',
-                        type=str,
-                        help="Name of file that contains all triplet/matched pairs geometry values")
     parser.add_argument('--geometry_folder',
                         type=str,
                         help="Folder path to all geometry values. Recommend do not change")
+    parser.add_argument('--descriptor_file_names',
+                        type=str,
+                        help="Base name of descriptor outputs")
+    parser.add_argument('--descriptor_folder',
+                        type=str,
+                        help="Location of descriptor output. Recoomend do not change")
     
-    ## Values
+    ## Parameters
     parser.add_argument('--eta',
                         type=float,
                         help="Hyperparameter for narrowness of peaks, large eta = narrow peak")
@@ -60,31 +62,24 @@ def parser_client():
     args, unknown_args = parser.parse_known_args()
     return args
 
-if __name__ == '__main__':
-    parser = parser_client()
+parser = parser_client()
 
-    pair_file_name = parser.pair_file_name
-    triplet_file_name = parser.triplet_file_name
-    geometry_folder = parser.geometry_folder
-    eta = parser.eta
-    zeta = parser.zeta
-    r_s = parser.r_s
-    r_cut = parser.r_cut
-    lambda_ = parser.lambda_
+geometry_file_name = parser.geometry_file_names
+geometry_folder = parser.geometry_folder
+descriptor_file_name = parser.descriptor_file_names
+descriptor_folder = parser.descriptor_folder
+eta = parser.eta
+zeta = parser.zeta
+r_s = parser.r_s
+r_cut = parser.r_cut
+lambda_ = parser.lambda_
 
-## Opening Atomic Geomtry
+## Loading Atomic Geomtry
 
-try:
-    triplet_file_path, _ = path_handler(triplet_file_name, geometry_folder)
-    with open(triplet_file_path, 'rb') as f:
-        triplet_geometry = pickle.load(f)
-        print("Triplet geometry loaded successfully")
-    pair_file_path, _ = path_handler(pair_file_name, geometry_folder)
-    with open(pair_file_path, 'rb') as f:
-        pair_geometry = pickle.load(f)
-        print("Pair geometry loaded successfully")
-except Exception as e:
-    print(f"Error in opening file due to:\n{e}")
+pair_geometry = file_loader(geometry_file_name, geometry_folder, "pair")
+triplet_geometry = file_loader(geometry_file_name, geometry_folder, "triplet")
+
+print(pair_geometry)
 
 def cutoff(r_ij, r_cut):
     if r_ij <= r_cut:
@@ -111,9 +106,9 @@ def radial_G1(r_ij, r_s, r_cut, eta):
     return G1
 
 def radial_G1_derivative(r_ij, r_s, r_cut, eta):
-    exp = np.exp(-eta*(r_ij - r_s)**2)
-    exp_deriv = exp * (-2*eta*(r_ij - r_s))
-    dG1_dr = exp_deriv * cutoff(r_ij, r_cut) + exp * cutoff_derivative(r_ij, r_cut)
+    exp_term = np.exp(-eta*(r_ij - r_s)**2)
+    exp_deriv = exp_term * (-2*eta*(r_ij - r_s))
+    dG1_dr = exp_deriv * cutoff(r_ij, r_cut) + exp_term * cutoff_derivative(r_ij, r_cut)
     return dG1_dr
 
 def angular_G2(cos_theta, r_ij, r_ik, r_jk, r_cut, zeta, lambda_, eta):
@@ -145,8 +140,20 @@ def angular_G2_derivative(cos_theta, theta, r_ij, r_ik, r_jk, r_cut, zeta, lambd
     dG2_dr_ik = const * (cos_term * fc_r_ij*fc_r_jk * (dfc_r_ik * exp_squared_sum + (exp_squared_sum * (-2*eta*r_ik) * fc_r_ik)))
     dG2_dr_jk = const * (cos_term * fc_r_ij*fc_r_ik * (dfc_r_jk * exp_squared_sum + (exp_squared_sum * (-2*eta*r_jk) * fc_r_jk)))
 
-    grad = (dG2_dtheta, (dG2_dr_ij, dG2_dr_ik, dG2_dr_jk))
+    grad = (dG2_dtheta, dG2_dr_ij, dG2_dr_ik, dG2_dr_jk)
     return grad
+
+def rad_internal_cart_proj(internal_grad_r_ij, r_ij_unit_vec):
+    # Simple application of chain rule
+    proj_grad = np.array(r_ij_unit_vec) * internal_grad_r_ij
+    return proj_grad
+
+def ang_internal_cart_proj(cos_theta, theta, r_ij):
+    # More complicated application of chain rule
+    None
+
+    
+
 '''
 triplet_geometry[a][b][c][d][e],
 - a structure
@@ -197,11 +204,11 @@ def compute_descriptors(triplet_geometry, pair_geometry, eta, zeta, lambda_, r_c
             ang_G += angular_G2(cos_theta, r_ij, r_ik, r_jk, r_cut, zeta, lambda_, eta)
             ang_G_deriv = angular_G2_derivative(cos_theta, theta, r_ij, r_ik, r_jk, r_cut, zeta, lambda_, eta)
             theta_deriv += ang_G_deriv[0]
-            r_ij_deriv += ang_G_deriv[1][0]
-            r_ik_deriv += ang_G_deriv[1][1]
-            r_jk_deriv += ang_G_deriv[1][2]
+            r_ij_deriv += ang_G_deriv[1]
+            r_ik_deriv += ang_G_deriv[2]
+            r_jk_deriv += ang_G_deriv[3]
 
-        ang_descriptor.append((struct[0], ang_G, (theta_deriv, (r_ij_deriv, r_ik_deriv, r_jk_deriv))))
+        ang_descriptor.append((struct[0], ang_G, theta_deriv, r_ij_deriv, r_ik_deriv, r_jk_deriv))
     
     rad_descriptor = []
     for struct in pair_geometry: # onto structures, level a
@@ -219,4 +226,10 @@ def compute_descriptors(triplet_geometry, pair_geometry, eta, zeta, lambda_, r_c
     return ang_descriptor, rad_descriptor
 
 ang_descriptor, rad_descriptor  = compute_descriptors(triplet_geometry, pair_geometry, eta, zeta, lambda_, r_cut, r_s)
-print(f"Radial Descriptor:\n{str(rad_descriptor):.200} ...\nAngular Descriptr:\n{str(ang_descriptor):200} ...")
+print(f"Radial Descriptor:\n{str(rad_descriptor):.250} ...\nAngular Descriptr:\n{str(ang_descriptor):250} ...")
+
+## Saving Descriptor Info
+
+if __name__ == '__main__':
+    file_saver(descriptor_file_name, descriptor_folder, "ang", ang_descriptor)
+    file_saver(descriptor_file_name, descriptor_folder, "rad", rad_descriptor)

@@ -4,7 +4,7 @@ import itertools
 import configargparse
 import pickle
 
-from utility import path_handler
+from utility import path_handler, file_saver
 
 ## Parser Setup
 
@@ -18,15 +18,10 @@ def parser_client():
     parser.add_argument('-c',
                         '--my-config',
                         is_config_file=True,
-                        help="Path of custom config file"
-                        )
-    parser.add_argument('--pair_file_name',
+                        help="Path of custom config file")
+    parser.add_argument('--geometry_file_names',
                         type=str,
-                        help="Name of file that contains all pair geometry values"
-                        )
-    parser.add_argument('--triplet_file_name',
-                        type=str,
-                        help="Name of file that contains all triplet/matched pairs geometry values")
+                        help="Base name of files that contain geometry values")
     parser.add_argument('--geometry_folder',
                         type=str,
                         help="Folder path to all geometry values. Recommend do not change")
@@ -34,12 +29,10 @@ def parser_client():
     args, unknown_args = parser.parse_known_args()
     return args
 
-if __name__ == '__main__':
-    parser = parser_client()
+parser = parser_client()
 
-    pair_file_name = parser.pair_file_name
-    triplet_file_name = parser.triplet_file_name
-    geometry_folder = parser.geometry_folder
+geometry_file_name = parser.geometry_file_names
+geometry_folder = parser.geometry_folder
 
 
 ## Parsing
@@ -164,9 +157,21 @@ def calculate_distance(atom1, atom2):
     pair_ids = atom1[0], atom2[0]
     x1, y1, z1 = atom1[2], atom1[3], atom1[4]
     x2, y2, z2 = atom2[2], atom2[3], atom2[4]
-    r = ((x2 - x1)**2 + (y2 - y1)**2 + (z2 - z1)**2)**0.5
-    r = np.float64(r)
-    return r, pair_ids
+    r_scal = ((x2 - x1)**2 + (y2 - y1)**2 + (z2 - z1)**2)**0.5
+    r_scal = np.float64(r_scal)
+    return r_scal, pair_ids
+
+def calculate_displacement(atom1, atom2):
+    pair_ids = atom1[0], atom2[0]
+    x1, y1, z1 = atom1[2], atom1[3], atom1[4]
+    x2, y2, z2 = atom2[2], atom2[3], atom2[4]
+    r_i = x2 - x1
+    r_j = y2 - y1
+    r_k = z2 - z1
+    r_scal = ((x2 - x1)**2 + (y2 - y1)**2 + (z2 - z1)**2)**0.5
+    r_unit_vec = r_i/r_scal, r_j/r_scal, r_k/r_scal
+    return r_unit_vec, pair_ids
+    
 
 def calculate_angle(atom1, atom2, atom3):
     triplet_ids = atom1[0], atom2[0], atom3[0]
@@ -187,10 +192,13 @@ def calculate_angle(atom1, atom2, atom3):
 
 def calculate_all_distances(atom_pairs):
     distances = []
+    displaces = []
     for pair in atom_pairs:
-        r, pair_ids = calculate_distance(pair[0], pair[1])
-        distances.append((pair_ids, r))
-    return distances
+        r_scal, pair_ids = calculate_distance(pair[0], pair[1])
+        distances.append((pair_ids, r_scal))
+        r_vec, pair_ids = calculate_displacement(pair[0], pair[1])
+        displaces.append((pair_ids, r_vec))
+    return distances, displaces
 
 def calculate_all_angles(atom_triplets):
     angles = []
@@ -203,19 +211,20 @@ def calculate_all_angles(atom_triplets):
 atom_pair_geometry = []
 for i, structure in enumerate(atom_files):
     atom_pairs = unique_atom_pairs(structure[1])
-    distances = calculate_all_distances(atom_pairs)
-    atom_pair_geometry.append((structure[0], distances))
+    distances, displaces = calculate_all_distances(atom_pairs)
+    atom_pair_geometry.append((structure[0], distances, displaces))
 
 print(f"You have {len(atom_pair_geometry[0][0])} number of pairs in the first structure, example:\n{str(atom_pair_geometry):.50}")
 ## Sorting, final data structure
 
 atom_triplet_geometry = []
 for i, structure in enumerate(atom_files):
-    distances = calculate_all_distances(unique_atom_pairs(structure[1]))
+    distances, displaces = calculate_all_distances(unique_atom_pairs(structure[1]))
     angles = calculate_all_angles(unique_atom_triplets(structure[1]))
     
     # Create distance dictionary with sorted pair IDs as keys
     distance_dict = {tuple(sorted(pair_ids)): r for pair_ids, r in distances}
+    displace_dict = {tuple(sorted(pair_ids)): r for pair_ids, r in displaces}
     
     # For each angle, collect the three associated distances
     angle_distances = []
@@ -225,11 +234,14 @@ for i, structure in enumerate(atom_files):
         dist1 = distance_dict[tuple(sorted((id1, id2)))]
         dist2 = distance_dict[tuple(sorted((id2, id3)))]
         dist3 = distance_dict[tuple(sorted((id1, id3)))]
-        angle_distances.append(((cos_theta, theta), [dist1, dist2, dist3]))
+        disp1 = displace_dict[tuple(sorted((id1, id2)))]
+        disp2 = displace_dict[tuple(sorted((id2, id3)))]
+        disp3 = displace_dict[tuple(sorted((id1, id3)))]
+        angle_distances.append(((cos_theta, theta), (dist1, dist2, dist3), (disp1, disp2, disp3)))
     
     atom_triplet_geometry.append((structure[0], angle_distances))
 
-print(f"Atom geometries:\n{str(atom_triplet_geometry):.200} ...")
+print(f"Atom geometries:\n{str(atom_triplet_geometry):.300} ...")
 
 '''
 The final data structure is a list of tuples. Each tuple contains:
@@ -243,19 +255,6 @@ We use just the distance (one at time) for the radial descriptor
 '''
 
 ## Saving Geometry Info
-try:
-    triplet_file_path, triplet_file_folder = path_handler(triplet_file_name, geometry_folder)
-    if not triplet_file_folder.exists():
-        print(f"{str(triplet_file_folder)} folder has been created")
-    triplet_file_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(triplet_file_path, 'wb') as f:
-        pickle.dump(atom_triplet_geometry, f)
-
-    pair_file_path, pair_file_folder = path_handler(pair_file_name, geometry_folder)
-    if not pair_file_folder.exists():
-        print(f"{str(pair_file_folder)} folder has been created")
-    pair_file_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(pair_file_path, 'wb') as f:
-        pickle.dump(atom_pair_geometry, f)
-except Exception as e:
-    print(f"File unable to be saved due to:\n{e}")
+if __name__ == '__main__':
+    file_saver(geometry_file_name, geometry_folder, "triplet", atom_triplet_geometry)
+    file_saver(geometry_file_name, geometry_folder, "pair", atom_pair_geometry)
