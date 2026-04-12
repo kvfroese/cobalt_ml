@@ -1,6 +1,46 @@
 from pathlib import Path
 import numpy as np
 import itertools
+import configargparse
+import pickle
+
+from utility import path_handler
+
+## Parser Setup
+
+def parser_client():
+    parser = configargparse.ArgParser(
+        description='For all required config arguments, see the default.ini file. You can specify a different config file with --config_file, or override any argument with --argname value.',
+        default_config_files=[Path('config/default.ini')]
+    )
+
+    # Arguments
+    parser.add_argument('-c',
+                        '--my-config',
+                        is_config_file=True,
+                        help="Path of custom config file"
+                        )
+    parser.add_argument('--pair_file_name',
+                        type=str,
+                        help="Name of file that contains all pair geometry values"
+                        )
+    parser.add_argument('--triplet_file_name',
+                        type=str,
+                        help="Name of file that contains all triplet/matched pairs geometry values")
+    parser.add_argument('--geometry_folder',
+                        type=str,
+                        help="Folder path to all geometry values. Recommend do not change")
+    
+    args, unknown_args = parser.parse_known_args()
+    return args
+
+if __name__ == '__main__':
+    parser = parser_client()
+
+    pair_file_name = parser.pair_file_name
+    triplet_file_name = parser.triplet_file_name
+    geometry_folder = parser.geometry_folder
+
 
 ## Parsing
 def open_file(file_path):
@@ -72,7 +112,7 @@ for file in folder_path.glob('*'):
         print(f"Error processing {file.name}: {e}")
         continue
 
-print(f"{len(atom_files)} files processed, with example output:\n{atom_files[0]}")
+print(f"{len(atom_files)} files processed, with example output:\n{str(atom_files[0]):.50} ...")
 
 ## Paired/Triplet Atomic Values
 
@@ -114,7 +154,7 @@ for structure in atom_files:
     atom_triplets_list.append((set_triplets, num_triplets))
 
 atom_triplets_list = unique_atom_triplets(atom_files[0][1])
-print(f"You have {len(atom_triplets_list)} atom angle descriptions for the first structure, with example:\n {atom_triplets_list[0]}")
+print(f"You have {len(atom_triplets_list)} atom angle descriptions for the first structure, with example:\n {str(atom_triplets_list[0]):.50} ... ")
 
 
 ## Calculation of Distance and Angle
@@ -160,20 +200,16 @@ def calculate_all_angles(atom_triplets):
     return angles
 
 # Unnecessary now, but useful for seeing ID numbers and checking outputs
-# atom_geometry = []
-# for i, structure in enumerate(atom_files):
-#     atom_pairs = unique_atom_pairs(structure[1])
-#     atom_triplets = unique_atom_triplets(structure[1])
-#     distances = calculate_all_distances(atom_pairs)
-#     angles = calculate_all_angles(atom_triplets)
-#     atom_geometry.append((structure[0], distances, angles))
-#
-# print(f"The first structure has {len(distances)} distances and {len(angles)} angles.")
-# print(f"Example distance: {str(distances[0]):.100} ... , example angle: {str(angles[0]):.100} ...")
+atom_pair_geometry = []
+for i, structure in enumerate(atom_files):
+    atom_pairs = unique_atom_pairs(structure[1])
+    distances = calculate_all_distances(atom_pairs)
+    atom_pair_geometry.append((structure[0], distances))
 
-# Sorting, final data structure
+print(f"You have {len(atom_pair_geometry[0][0])} number of pairs in the first structure, example:\n{str(atom_pair_geometry):.50}")
+## Sorting, final data structure
 
-atom_geometry = []
+atom_triplet_geometry = []
 for i, structure in enumerate(atom_files):
     distances = calculate_all_distances(unique_atom_pairs(structure[1]))
     angles = calculate_all_angles(unique_atom_triplets(structure[1]))
@@ -191,9 +227,9 @@ for i, structure in enumerate(atom_files):
         dist3 = distance_dict[tuple(sorted((id1, id3)))]
         angle_distances.append(((cos_theta, theta), [dist1, dist2, dist3]))
     
-    atom_geometry.append((structure[0], angle_distances))
+    atom_triplet_geometry.append((structure[0], angle_distances))
 
-print(f"Geometries:\n{str(atom_geometry):.250} ...")
+print(f"Atom geometries:\n{str(atom_triplet_geometry):.200} ...")
 
 '''
 The final data structure is a list of tuples. Each tuple contains:
@@ -205,3 +241,21 @@ The final data structure is a list of tuples. Each tuple contains:
 We use the angle and the three distances for the angular descriptor
 We use just the distance (one at time) for the radial descriptor
 '''
+
+## Saving Geometry Info
+try:
+    triplet_file_path, triplet_file_folder = path_handler(triplet_file_name, geometry_folder)
+    if not triplet_file_folder.exists():
+        print(f"{str(triplet_file_folder)} folder has been created")
+    triplet_file_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(triplet_file_path, 'wb') as f:
+        pickle.dump(atom_triplet_geometry, f)
+
+    pair_file_path, pair_file_folder = path_handler(pair_file_name, geometry_folder)
+    if not pair_file_folder.exists():
+        print(f"{str(pair_file_folder)} folder has been created")
+    pair_file_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(pair_file_path, 'wb') as f:
+        pickle.dump(atom_pair_geometry, f)
+except Exception as e:
+    print(f"File unable to be saved due to:\n{e}")
