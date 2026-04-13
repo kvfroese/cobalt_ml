@@ -25,6 +25,9 @@ def parser_client():
     parser.add_argument('--geometry_folder',
                         type=str,
                         help="Folder path to all geometry values. Recommend do not change")
+    parser.add_argument('--output_read_folder',
+                        type=str,
+                        help="Where your Orca .out's should be")
     
     args, unknown_args = parser.parse_known_args()
     return args
@@ -33,6 +36,7 @@ parser = parser_client()
 
 geometry_file_name = parser.geometry_file_names
 geometry_folder = parser.geometry_folder
+output_read_folder = parser.output_read_folder
 
 
 ## Parsing
@@ -71,8 +75,35 @@ def extract_atom_info(lines, start_line, end_line):
         atom_info.append((atom_sym, x, y, z))
     return atom_info
 
-folder_path = Path('orca_outputs')
+folder_path = Path(output_read_folder)
 
+def find_SPE(folder_path):
+    spe_list = []
+    all_files_list = []
+    for file in folder_path.glob('*.out'):
+        try:
+            lines = open_file(file)
+            for i, line in enumerate(lines):
+                if line.startswith('FINAL SINGLE POINT ENERGY'):
+                    line_values = line.split()
+                    number = line_values[4]
+                    spe_list.append((file.name, number))
+            all_files_list.append(file.name)
+        except Exception as e:
+            print(f"Error processing {file.name}: {e}")
+    return spe_list, all_files_list
+
+
+spe_list, all_files_list = find_SPE(folder_path)
+print(f"{len(spe_list)} single point energy values have been parsed")
+
+found_strings = set(val for tup in spe_list for val in tup)
+missing = set(all_files_list) - found_strings
+
+if len(missing) > 0:
+    print(missing)
+    raise ValueError(f"{len(missing)} data files do not have a single point energy,\nto continue you must delete it from your outputs folder and try again, look above for the name.")
+    
 
 '''
 We prduce a list of tuples of tuples: The order of atom, x, y, z and
@@ -83,28 +114,33 @@ where each tuple contains
     a tuple of atom information (atom symbol and coordinates),
     and the number of atoms.
 '''
-atom_files = []
-for file in folder_path.glob('*.out'):
-    try:
-        lines = open_file(file)
-        start_line, end_line = atoms(lines)
 
-        atom_info = []  # reset per file
-        id_counter = 0
-        for line in lines[start_line:end_line]:
-            atom_sym, x, y, z = line.split()  # separates by whitespace
-            atom_sym = atom_sym.strip()  # remove whitespace
-            x, y, z = float(x), float(y), float(z)
-            atom_info.append((id_counter, atom_sym, x, y, z))
-            id_counter += 1
+def find_atom_values():
+    atom_files = []
+    for file in folder_path.glob('*.out'):
+        try:
+            lines = open_file(file)
+            start_line, end_line = atoms(lines)
 
-        atom_number = len(atom_info)
-        atom_files.append((file.name, atom_info, atom_number))
-    except Exception as e:
-        print(f"Error processing {file.name}: {e}")
-        continue
+            atom_info = []  # reset per file
+            id_counter = 0
+            for line in lines[start_line:end_line]:
+                atom_sym, x, y, z = line.split()  # separates by whitespace
+                atom_sym = atom_sym.strip()  # remove whitespace
+                x, y, z = float(x), float(y), float(z)
+                atom_info.append((id_counter, atom_sym, x, y, z))
+                id_counter += 1
 
-print(f"{len(atom_files)} files processed, with example output:\n{str(atom_files[0]):.50} ...")
+            atom_number = len(atom_info)
+            atom_files.append((file.name, atom_info, atom_number))
+        except Exception as e:
+            print(f"Error processing {file.name}: {e}")
+            continue
+    return atom_files
+
+atom_files = find_atom_values()
+
+print(f"{len(atom_files)} files processed, with example output:\n{str(atom_files[0]):.75} ...")
 
 ## Paired/Triplet Atomic Values
 
@@ -197,7 +233,6 @@ def calculate_all_distances(atom_pairs):
         distances.append((pair_ids, r_scal))
         r_unit_vec, pair_ids = calculate_displacement(pair[0], pair[1])
         displaces.append((pair_ids, r_unit_vec))
-    print(displaces)
     return distances, displaces
 
 def calculate_all_angles(atom_triplets):
