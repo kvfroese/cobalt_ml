@@ -44,7 +44,7 @@ def open_file(file_path):
 def atoms(lines):
     # Find starting line
     for i, line in enumerate(lines):
-        if line.lstrip().startswith('*** FINAL ENERGY EVALUATION'):
+        if line.lstrip().startswith('* Single'):
             start_line = i + 6
             print(f"Found line {start_line}")
             break
@@ -84,7 +84,7 @@ where each tuple contains
     and the number of atoms.
 '''
 atom_files = []
-for file in folder_path.glob('*'):
+for file in folder_path.glob('*.out'):
     try:
         lines = open_file(file)
         start_line, end_line = atoms(lines)
@@ -97,7 +97,6 @@ for file in folder_path.glob('*'):
             x, y, z = float(x), float(y), float(z)
             atom_info.append((id_counter, atom_sym, x, y, z))
             id_counter += 1
-        atom_info = tuple(atom_info)
 
         atom_number = len(atom_info)
         atom_files.append((file.name, atom_info, atom_number))
