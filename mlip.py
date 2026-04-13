@@ -40,8 +40,14 @@ def parser_client():
     parser.add_argument('--descriptor_folder',
                         type=str,
                         help="Location of descriptor output. Recoomend do not change")
+    parser.add_argument('--orca_read_folder',
+                        type=str,
+                        help="Path of where your Orca .out's should be")
     
     ## Parameters
+    parser.add_argument('--epsilon',
+                        type=float,
+                        help="Shift value to prevent errors during Cartesian projection")
     parser.add_argument('--eta',
                         type=float,
                         help="Hyperparameter for narrowness of peaks, large eta = narrow peak")
@@ -67,6 +73,9 @@ geometry_file_name = parser.geometry_file_names
 geometry_folder = parser.geometry_folder
 descriptor_file_name = parser.descriptor_file_names
 descriptor_folder = parser.descriptor_folder
+orca_outputs = parser.orca_read_folder
+
+epsilon = parser.epsilon
 eta = parser.eta
 zeta = parser.zeta
 r_s = parser.r_s
@@ -147,25 +156,9 @@ def r_internal_cart_proj(dF_dr, r_unit_vec):
     return proj_grad
 
 def theta_internal_cart_proj(cos_theta, theta, r_ij, r_ik, r_ij_unit_vec, r_ik_unit_vec, dF_dtheta):
-    proj = r_ij_unit_vec/np.sin(theta)*(1/r_ik + cos_theta/r_ij) + r_ik_unit_vec*np.sin(theta)*(1/r_ij + cos_theta/r_ik)
+    proj = r_ij_unit_vec/(np.sin(theta) + epsilon)*(1/r_ik + cos_theta/r_ij) + r_ik_unit_vec/(np.sin(theta) + epsilon)*(1/r_ij + cos_theta/r_ik)
     proj_grad = proj * dF_dtheta
     return proj_grad
-
-test_triplet_data = [('example1',
-                    ((np.float64(-0.5245697946451036), np.float64(2.1230060501601384)), # angle data, cos_theta, theat
-                     (np.float64(0.9699237134950357), np.float64(1.65381114097106), np.float64(0.9241097121013283)), # distances
-                    ((0.8165590643681625, 0.0, -0.577261894115826), # displacements
-                     (0.9928582286825538, 0.0, -0.11930020007251395),
-                     (-0.919804206004057, 0.0, -0.3923776530553777))))]
-print(test_triplet_data[0][1][2])
-
-test_pair_data = [('example1',
-                [((0, 1), np.float64(0.9241097121013283)), # distance 1
-                 ((0, 2), np.float64(0.9699237134950357))], # # distance 2
-                [((0, 1), (-0.919804206004057, 0.0, -0.3923776530553777)), # disp 1
-                 ((0, 2), (0.8165590643681625, 0.0, -0.577261894115826))])] # disp 2
-
-print(test_pair_data[0][2][0][1][2])
 
 def compute_descriptor_grads(triplet_geometry, pair_geometry, eta, zeta, lambda_, r_cut, r_s):
     rad_desc_grads = []
@@ -287,19 +280,17 @@ def compute_descriptors(triplet_geometry, pair_geometry, eta, zeta, lambda_, r_c
         data_values = struct[1] # onto data values, level b
         
         rad_G = 0
-        # rad_G_deriv = 0
         for vals in data_values: # iterating through each atom, level c
             r_scal = vals[1]
             rad_G += radial_G1(r_scal, r_s, r_cut, eta)
-            # rad_G_deriv += radial_G1_derivative(r, r_s, r_cut, eta)
         
         rad_descriptor.append((struct[0], rad_G)) # rad_G_deriv))
     
     return ang_descriptor, rad_descriptor
 
 ang_descriptor, rad_descriptor  = compute_descriptors(triplet_geometry, pair_geometry, eta, zeta, lambda_, r_cut, r_s)
-print(f"Radial Descriptor:\n{str(rad_descriptor):.250} ...\nAngular Descriptr:\n{str(ang_descriptor):250} ...")
-print(f"Rad Grads:\n{str(rad_desc_grads):.250} ...\nAng Grads:\n{str(ang_desc_grads):250} ...")
+print(f"Radial Descriptor:\n{str(rad_descriptor):.100} ...\nAngular Descriptor:\n{str(ang_descriptor):.100} ...")
+print(f"Rad Grads:\n{str(rad_desc_grads):.100} ...\nAng Grads:\n{str(ang_desc_grads):.100} ...")
 
 
 # Saving Descriptor Info
