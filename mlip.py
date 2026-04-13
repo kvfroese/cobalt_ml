@@ -6,6 +6,7 @@ Implementation of all necessary functions for the MLIP potential, including
     compute_descriptors, force_chain_rule
 """
 
+import pickle
 from pathlib import Path
 import numpy as np
 import configargparse
@@ -26,22 +27,21 @@ def parser_client():
                         '--my-config',
                         is_config_file=True,
                         help="Path of custom config file")
-    parser.add_argument('--geometry_file_names',
+    parser.add_argument('--input_file_names',
                         type=str,
-                        help="Base name of files that contain geometry values"
-                        )
-    parser.add_argument('--geometry_folder',
+                        help="Base name of input geometry files")
+    parser.add_argument('--input_folder',
                         type=str,
-                        help="Folder path to all geometry values. Recommend do not change")
-    parser.add_argument('--descriptor_file_names',
+                        help="Folder containing geometry files")
+    parser.add_argument('--output_file_names',
                         type=str,
-                        help="Base name of descriptor outputs")
-    parser.add_argument('--descriptor_folder',
+                        help="Base name for descriptor outputs")
+    parser.add_argument('--output_folder',
                         type=str,
-                        help="Location of descriptor output. Recoomend do not change")
-    parser.add_argument('--orca_read_folder',
-                        type=str,
-                        help="Path of where your Orca .out's should be")
+                        help="Folder for descriptor outputs")
+    parser.add_argument('--chunk',
+                        type=int,
+                        help='Chunk number to process')
     
     ## Parameters
     parser.add_argument('--epsilon',
@@ -68,11 +68,11 @@ def parser_client():
 
 parser = parser_client()
 
-geometry_file_name = parser.geometry_file_names
-geometry_folder = parser.geometry_folder
-descriptor_file_name = parser.descriptor_file_names
-descriptor_folder = parser.descriptor_folder
-orca_outputs = parser.orca_read_folder
+input_file_names = parser.output_file_names
+input_folder = Path(parser.output_folder)
+output_file_names = parser.output_file_names
+output_folder = Path(parser.output_folder)
+chunk_num = parser.chunk
 
 epsilon = parser.epsilon
 eta = parser.eta
@@ -80,11 +80,6 @@ zeta = parser.zeta
 r_s = parser.r_s
 r_cut = parser.r_cut
 lambda_ = parser.lambda_
-
-## Loading Atomic Geomtry
-
-pair_geometry = file_loader(geometry_file_name, geometry_folder, "pair")
-triplet_geometry = file_loader(geometry_file_name, geometry_folder, "triplet")
 
 def cutoff(r_ij, r_cut):
     if r_ij <= r_cut:
@@ -227,7 +222,7 @@ def compute_descriptor_grads(triplet_geometry, pair_geometry, eta, zeta, lambda_
 
     return rad_desc_grads, ang_desc_grads
 
-rad_desc_grads, ang_desc_grads = compute_descriptor_grads(triplet_geometry, pair_geometry, eta, zeta, lambda_, r_cut, r_s)
+
 '''
 triplet_geometry[a][b][c][d][e],
 - a structure
@@ -287,14 +282,37 @@ def compute_descriptors(triplet_geometry, pair_geometry, eta, zeta, lambda_, r_c
     
     return ang_descriptor, rad_descriptor
 
-ang_descriptor, rad_descriptor  = compute_descriptors(triplet_geometry, pair_geometry, eta, zeta, lambda_, r_cut, r_s)
-print(f"Radial Descriptor:\n{str(rad_descriptor):.200} ...\nAngular Descriptor:\n{str(ang_descriptor):.200} ...")
-print(f"Rad Grads:\n{str(rad_desc_grads):.200} ...\nAng Grads:\n{str(ang_desc_grads):.200} ...")
-
 # Saving Descriptor Info
 
 if __name__ == '__main__':
-    file_saver(descriptor_file_name, descriptor_folder, "ang", ang_descriptor)
-    file_saver(descriptor_file_name, descriptor_folder, "rad", rad_descriptor)
-    file_saver(descriptor_file_name, descriptor_folder, "rad_grad", rad_desc_grads)
-    file_saver(descriptor_file_name, descriptor_folder, "ang_grad", ang_desc_grads)
+    # Load only this chunk
+    chunk_file = Path(input_folder) / f"{input_file_names}_chunk{chunk_num}_results.pkl"
+    print(f"Loading {chunk_file}...")
+
+    with open(chunk_file, 'rb') as f:
+        data = pickle.load(f)
+
+    if isinstance(data, dict):
+        pair_geometry = data.get('pair', [])
+        triplet_geometry = data.get('triplet', [])
+    else:
+        pair_geometry, triplet_geometry = data[0], data[1]
+
+    print(f"Loaded {len(pair_geometry)} structures from chunk {chunk_num}")
+
+    ang_descriptor, rad_descriptor  = compute_descriptors(triplet_geometry, pair_geometry, eta, zeta, lambda_, r_cut, r_s)
+    print(f"Radial Descriptor:\n{str(rad_descriptor):.200} ...\nAngular Descriptor:\n{str(ang_descriptor):.200} ...")
+    print(f"Rad Grads:\n{str(rad_desc_grads):.200} ...\nAng Grads:\n{str(ang_desc_grads):.200} ...")
+
+
+    rad_desc_grads, ang_desc_grads = compute_descriptor_grads(triplet_geometry, pair_geometry, eta, zeta, lambda_, r_cut, r_s)
+    ang_descriptor, rad_descriptor  = compute_descriptors(triplet_geometry, pair_geometry, eta, zeta, lambda_, r_cut, r_s)
+    print(f"Radial Descriptor:\n{str(rad_descriptor):.100} ...\nAngular Descriptor:\n{str(ang_descriptor):.100} ...")
+    print(f"Rad Grads:\n{str(rad_desc_grads):.100} ...\nAng Grads:\n{str(ang_desc_grads):.100} ...")
+
+
+    # Saving Descriptor Info
+    file_saver(output_file_names, output_folder, f"ang_chunk_{chunk_num}", ang_descriptor)
+    file_saver(output_file_names, output_folder, f"rad_chunk_{chunk_num}", rad_descriptor)
+    file_saver(output_file_names, output_folder, f"rad_grad_chunk_{chunk_num}", rad_desc_grads)
+    file_saver(output_file_names, output_folder, f"ang_grad_chunk_{chunk_num}", ang_desc_grads)
