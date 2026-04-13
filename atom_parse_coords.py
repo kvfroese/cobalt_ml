@@ -28,6 +28,12 @@ def parser_client():
     parser.add_argument('--output_read_folder',
                         type=str,
                         help="Where your Orca .out's should be")
+    parser.add_argument('--descriptor_file_names',
+                        type=str,
+                        help="Base name of descriptor outputs")
+    parser.add_argument('--descriptor_folder',
+                        type=str,
+                        help="Location of descriptor output. Recoomend do not change")
     
     args, unknown_args = parser.parse_known_args()
     return args
@@ -37,6 +43,8 @@ parser = parser_client()
 geometry_file_name = parser.geometry_file_names
 geometry_folder = parser.geometry_folder
 output_read_folder = parser.output_read_folder
+descriptor_file_name = parser.descriptor_file_names
+descriptor_folder = parser.descriptor_folder
 
 ## Parsing
 def open_file(file_path):
@@ -92,7 +100,6 @@ def find_SPE(folder_path):
             print(f"Error processing {file.name}: {e}")
     return spe_list, all_files_list
 
-
 spe_list, all_files_list = find_SPE(folder_path)
 print(f"{len(spe_list)} single point energy values have been parsed, example:\n{spe_list[0]}")
 
@@ -103,7 +110,6 @@ if len(missing) > 0:
     print(missing)
     raise ValueError(f"{len(missing)} data files do not have a single point energy,\nto continue you must delete it from your outputs folder and try again, look above for the name.")
     
-
 '''
 We prduce a list of tuples of tuples: The order of atom, x, y, z and
 order of the atom lines are preserved because we need to keep track
@@ -139,7 +145,7 @@ def find_atom_values():
 
 atom_files = find_atom_values()
 
-print(f"{len(atom_files)} files processed for coordinates, with example output:\n{str(atom_files[0]):.75} ...")
+print(f"{len(atom_files)} files processed for coordinates, with example output:\n{str(atom_files):.50} ...")
 
 ## Paired/Triplet Atomic Values
 
@@ -150,10 +156,9 @@ def unique_atom_pairs(atom_info):
 
 atom_pairs_list = []
 for structure in atom_files:
-    print(structure[0])
     set_pairs = unique_atom_pairs(structure[1])
     num_pairs = len(set_pairs)
-    atom_pairs_list.append((structure[0], set_pairs, num_pairs))
+    atom_pairs_list.append((set_pairs, num_pairs))
 
 print(f"You have {len(atom_pairs_list[0][0])} unique atom pairs for the first structure, with example:\n {str(atom_pairs_list[0]):.100}")
 
@@ -179,7 +184,7 @@ atom_triplets_list = []
 for structure in atom_files:
     set_triplets = unique_atom_triplets(structure[1])
     num_triplets = len(set_triplets)
-    atom_triplets_list.append((structure[0], set_triplets, num_triplets))
+    atom_triplets_list.append((set_triplets, num_triplets))
 
 atom_triplets_list = unique_atom_triplets(atom_files[0][1])
 print(f"You have {len(atom_triplets_list)} atom angle descriptions for the first structure, with example:\n {str(atom_triplets_list[0]):.50} ... ")
@@ -278,7 +283,7 @@ for i, structure in enumerate(atom_files):
     atom_triplet_geometry.append((structure[0], angle_distances))
 
 print(f"Atom triplet geometries:\n{str(atom_triplet_geometry):.200} ...")
-print(f"Atom pair goemetries:\n{str(atom_pair_geometry):.500} ...")
+print(f"Atom pair geometries:\n{str(atom_pair_geometry):.500} ...")
 
 '''
 The final data structure is a list of tuples. Each tuple contains:
@@ -291,7 +296,8 @@ We use the angle and the three distances for the angular descriptor
 We use just the distance (one at time) for the radial descriptor
 '''
 
-## Saving Geometry Info
+# Saving Geometry Info
 if __name__ == '__main__':
     file_saver(geometry_file_name, geometry_folder, "triplet", atom_triplet_geometry)
     file_saver(geometry_file_name, geometry_folder, "pair", atom_pair_geometry)
+    file_saver(descriptor_file_name, descriptor_folder, "energies", spe_list)
