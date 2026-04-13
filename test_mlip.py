@@ -5,12 +5,12 @@ Run with: python test_mlip.py
 
 import numpy as np
 import torch
+from regression import ridge_fit, ridge_predict
 from mlip import (
     cutoff, cutoff_derivative,
     radial_G1, radial_G1_derivative,
     angular_G2, angular_G2_derivative,
-    compute_descriptors, ridge_fit, ridge_predict,
-    force_chain_rule
+    compute_descriptors, force_chain_rule
 )
 
 

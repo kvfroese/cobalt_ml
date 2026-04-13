@@ -3,8 +3,7 @@ Implementation of all necessary functions for the MLIP potential, including
     cutoff, cutoff_derivative,
     radial_G1, radial_G1_derivative,
     angular_G2, angular_G2_derivative,
-    compute_descriptors, ridge_fit, ridge_predict,
-    force_chain_rule
+    compute_descriptors, force_chain_rule
 """
 
 from pathlib import Path
