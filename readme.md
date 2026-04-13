@@ -1,6 +1,6 @@
 # Linear MLIP Implementation for Cobalt Structures
 
-This is an implementation of a linear machine learning interatomic potential, using the Behler–Parrinello method, with the use of invariant geometric descriptors. The symmetry and cutoff functions used in the project came from the BP paper *Generalized Neural-Network Representation of High-Dimensional Potential-Energy Surfaces*.
+This is an implementation of a linear machine learning interatomic potential, using the Behler–Parrinello method, with the use of invariant geometric descriptors. The symmetry and cutoff functions used in the project came from the BP paper *Generalized Neural-Network Representation of High-Dimensional Potential-Energy Surfaces*. The data we have used for learning is a good majority of the COMPASS dataset for cobalt (II) coordination structures.
 
 ## How to Run
 
