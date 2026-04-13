@@ -155,7 +155,7 @@ def r_internal_cart_proj(dF_dr, r_unit_vec):
     return proj_grad
 
 def theta_internal_cart_proj(cos_theta, theta, r_ij, r_ik, r_ij_unit_vec, r_ik_unit_vec, dF_dtheta):
-    proj = r_ij_unit_vec/(np.sin(theta) + epsilon)*(1/r_ik + cos_theta/r_ij) + r_ik_unit_vec/(np.sin(theta) + epsilon)*(1/r_ij + cos_theta/r_ik)
+    proj = r_ij_unit_vec/((np.sin(theta) + 1e-12) + epsilon)*(1/r_ik + cos_theta/r_ij) + r_ik_unit_vec/(np.sin(theta) + epsilon)*(1/r_ij + cos_theta/r_ik)
     proj_grad = proj * dF_dtheta
     return proj_grad
 

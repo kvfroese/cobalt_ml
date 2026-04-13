@@ -189,7 +189,7 @@ print(f'Validation set: {X_val.shape[0]} samples')
 print(f'Test set: {X_test.shape[0]} samples')
 
 #tune hyperparameters w/ validation set
-alpha_candidates = [1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 0.1, 1.0, 10.0, 100.0]
+alpha_candidates = [1e-12, 1e-11, 1e-10, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 0.1, 1.0, 10.0, 100.0]
 best_alpha = None
 best_val_mae = float('inf')
 best_w = None
@@ -214,7 +214,7 @@ names_train_val = names_train + names_val
 
 print(f'Final training set size: {X_train_val.shape[0]} samples')
 
-w_final = ridge_fit(X_train_val, y_train_val, best_alpha)
+w_final = ridge_fit(X_train_val, y_train_val, best_a)
 print(f'Number of coefficients: {len(w_final)}')
 print(f'Intercept: {w_final[0]:.6f}')
 print(f'Coefficient range: [{w_final[1:].min():.6f}, {w_final[1:].max():.6f}]')
@@ -229,6 +229,8 @@ print(f'Test MAE: {test_mae:.6f} eV')
 print(f'Test R²:  {test_r2:.6f}')
 
 #evaluate on training set for comparison
+y_train_pred = ridge_predict(X_train, w_final)
+
 train_mae = mean_absolute_error(y_train, y_train_pred)
 train_r2 = r2_score(y_train, y_train_pred)
 
@@ -281,7 +283,7 @@ results = {
     'X_test': X_test
 }
 
-output_file = path(desccriptor_folder) / f'{descriptor_file_name}_ridge_results.pkl'
+output_file = Path(descriptor_folder) / f'{descriptor_file_name}_ridge_results.pkl'
 with open(output_file, 'wb') as f:
     pickle.dump(results, f)
 print(f'\nResults saved to {output_file}')
