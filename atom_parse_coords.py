@@ -38,7 +38,6 @@ geometry_file_name = parser.geometry_file_names
 geometry_folder = parser.geometry_folder
 output_read_folder = parser.output_read_folder
 
-
 ## Parsing
 def open_file(file_path):
     with open(Path(file_path), 'r') as f:
@@ -50,7 +49,7 @@ def atoms(lines):
     for i, line in enumerate(lines):
         if line.lstrip().startswith('* Single'):
             start_line = i + 6
-            print(f"Found line {start_line}")
+            # print(f"Found start line {start_line}")
             break
     else:
         raise ValueError("Could not find '*** FINAL' in the file.")
@@ -59,7 +58,7 @@ def atoms(lines):
     for j, line in enumerate(lines[start_line:]):
         if line.startswith('-'):
             end_line = start_line + j - 1 # exclude blank line after coordinates
-            print(f"Found line {end_line}")
+            # print(f"Found end line {end_line}")
             break
     else:
         raise ValueError("Could not find end line (line starting with '-') after '*** FINAL'.")
@@ -87,7 +86,7 @@ def find_SPE(folder_path):
                 if line.startswith('FINAL SINGLE POINT ENERGY'):
                     line_values = line.split()
                     number = line_values[4]
-                    spe_list.append((file.name, number))
+                    spe_list.append((file.name, float(number)))
             all_files_list.append(file.name)
         except Exception as e:
             print(f"Error processing {file.name}: {e}")
@@ -95,7 +94,7 @@ def find_SPE(folder_path):
 
 
 spe_list, all_files_list = find_SPE(folder_path)
-print(f"{len(spe_list)} single point energy values have been parsed")
+print(f"{len(spe_list)} single point energy values have been parsed, example:\n{spe_list[0]}")
 
 found_strings = set(val for tup in spe_list for val in tup)
 missing = set(all_files_list) - found_strings
@@ -140,22 +139,23 @@ def find_atom_values():
 
 atom_files = find_atom_values()
 
-print(f"{len(atom_files)} files processed, with example output:\n{str(atom_files[0]):.75} ...")
+print(f"{len(atom_files)} files processed for coordinates, with example output:\n{str(atom_files[0]):.75} ...")
 
 ## Paired/Triplet Atomic Values
 
 # Generate unique atom pairs, per file, for radial descriptors
-def unique_atom_pairs(atom_info, ):
+def unique_atom_pairs(atom_info):
     atom_pairs = list(itertools.combinations(atom_info, 2))
     return atom_pairs
 
 atom_pairs_list = []
 for structure in atom_files:
+    print(structure[0])
     set_pairs = unique_atom_pairs(structure[1])
     num_pairs = len(set_pairs)
-    atom_pairs_list.append((set_pairs, num_pairs))
+    atom_pairs_list.append((structure[0], set_pairs, num_pairs))
 
-print(f"You have {len(atom_pairs_list[0][0])} unique atom distance descriptions for the first structure, with example:\n {atom_pairs_list[0][0][2]}")
+print(f"You have {len(atom_pairs_list[0][0])} unique atom pairs for the first structure, with example:\n {str(atom_pairs_list[0]):.100}")
 
 '''
 The goal is to create unique atom triplets for angular descriptors,
@@ -179,11 +179,10 @@ atom_triplets_list = []
 for structure in atom_files:
     set_triplets = unique_atom_triplets(structure[1])
     num_triplets = len(set_triplets)
-    atom_triplets_list.append((set_triplets, num_triplets))
+    atom_triplets_list.append((structure[0], set_triplets, num_triplets))
 
 atom_triplets_list = unique_atom_triplets(atom_files[0][1])
 print(f"You have {len(atom_triplets_list)} atom angle descriptions for the first structure, with example:\n {str(atom_triplets_list[0]):.50} ... ")
-
 
 ## Calculation of Distance and Angle
 
@@ -249,7 +248,7 @@ for i, structure in enumerate(atom_files):
     distances, displaces = calculate_all_distances(atom_pairs)
     atom_pair_geometry.append((structure[0], distances, displaces))
 
-print(f"You have {len(atom_pair_geometry[0][0])} number of pairs in the first structure, example:\n{str(atom_pair_geometry):.50}")
+print(f"You have {len(atom_pair_geometry[0][0])} number of pairs in the first structure, example:\n{str(atom_pair_geometry):.75}")
 ## Sorting, final data structure
 
 atom_triplet_geometry = []

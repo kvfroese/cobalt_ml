@@ -289,9 +289,8 @@ def compute_descriptors(triplet_geometry, pair_geometry, eta, zeta, lambda_, r_c
     return ang_descriptor, rad_descriptor
 
 ang_descriptor, rad_descriptor  = compute_descriptors(triplet_geometry, pair_geometry, eta, zeta, lambda_, r_cut, r_s)
-print(f"Radial Descriptor:\n{str(rad_descriptor):.100} ...\nAngular Descriptor:\n{str(ang_descriptor):.100} ...")
-print(f"Rad Grads:\n{str(rad_desc_grads):.100} ...\nAng Grads:\n{str(ang_desc_grads):.100} ...")
-
+print(f"Radial Descriptor:\n{str(rad_descriptor):.200} ...\nAngular Descriptor:\n{str(ang_descriptor):.200} ...")
+print(f"Rad Grads:\n{str(rad_desc_grads):.200} ...\nAng Grads:\n{str(ang_desc_grads):.200} ...")
 
 # Saving Descriptor Info
 
